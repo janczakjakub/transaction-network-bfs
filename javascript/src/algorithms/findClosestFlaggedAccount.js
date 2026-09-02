@@ -1,38 +1,45 @@
-import { bfs } from "./bfs.js";
+import { bfs, buildPathTo } from "./bfs.js";
+import { pickBfsStats } from "./bfsStats.js";
+import { createFlagCheck } from "../graph/flags.js";
+import { assertAccountId, assertGraph } from "../validation/assertions.js";
 
-function toSet(flaggedAccounts) {
-  if (flaggedAccounts instanceof Set) {
-    return flaggedAccounts;
+export const DEFAULT_FLAGGED_MAX_DEPTH = 3;
+
+/**
+ * Wyszukuje najbliższe oznaczone konto w gotowym wyniku BFS. `visitOrder` jest
+ * uporządkowany rosnąco po głębokości, więc pierwsze trafienie jest najbliższe.
+ */
+export function findFlaggedInBfsResult(bfsResult, isFlagged, options = {}) {
+  const includeSource = Boolean(options.includeSource);
+
+  for (const candidateAccountId of bfsResult.visitOrder) {
+    if (!includeSource && candidateAccountId === bfsResult.sourceAccount) {
+      continue;
+    }
+
+    if (isFlagged(candidateAccountId)) {
+      const path = buildPathTo(bfsResult, candidateAccountId);
+      return {
+        accountId: candidateAccountId,
+        distance: path.length > 0 ? path.length - 1 : null,
+        path
+      };
+    }
   }
 
-  return new Set(flaggedAccounts ?? []);
-}
-
-function isFlagged(graph, accountId, flaggedSet) {
-  if (flaggedSet.has(accountId)) {
-    return true;
-  }
-
-  return graph.isFlagged(accountId);
-}
-
-function pickBfsStats(result) {
-  return {
-    visitedAccounts: result.visitedAccounts,
-    transactionsChecked: result.transactionsChecked,
-    maxQueueSize: result.maxQueueSize,
-    maxDepthReached: result.maxDepthReached,
-    executionTimeMs: result.executionTimeMs
-  };
+  return { accountId: null, distance: null, path: [] };
 }
 
 export function findClosestFlaggedAccount(
   graph,
   accountId,
-  maxDepth,
+  maxDepth = DEFAULT_FLAGGED_MAX_DEPTH,
   options = {}
 ) {
-  const flaggedSet = toSet(options.flaggedAccounts);
+  assertGraph(graph);
+  assertAccountId(accountId);
+
+  const isFlagged = createFlagCheck(graph, options.flaggedAccounts);
   const includeSource = Boolean(options.includeSource);
 
   const result = bfs(graph, accountId, {
@@ -41,7 +48,7 @@ export function findClosestFlaggedAccount(
       if (!includeSource && depth === 0) {
         return false;
       }
-      return isFlagged(graph, candidateAccountId, flaggedSet);
+      return isFlagged(candidateAccountId);
     }
   });
 

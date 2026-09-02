@@ -1,3 +1,5 @@
+import { fromMinorUnits, getAmountMinor, isRatioWithin, ratioOf } from "../money/money.js";
+
 function toMinutes(milliseconds) {
   return milliseconds / 60_000;
 }
@@ -23,7 +25,8 @@ export function detectRapidForwarding(
   const matches = [];
 
   for (const incoming of sortedIncoming) {
-    if (incoming.amount <= 0) {
+    const receivedMinor = getAmountMinor(incoming);
+    if (receivedMinor <= 0) {
       continue;
     }
 
@@ -41,8 +44,10 @@ export function detectRapidForwarding(
         break;
       }
 
-      const ratio = outgoing.amount / incoming.amount;
-      if (ratio < minForwardRatio || ratio > maxForwardRatio) {
+      const forwardedMinor = getAmountMinor(outgoing);
+      if (
+        !isRatioWithin(forwardedMinor, receivedMinor, minForwardRatio, maxForwardRatio)
+      ) {
         continue;
       }
 
@@ -51,9 +56,11 @@ export function detectRapidForwarding(
         accountId,
         incomingTransactionId: incoming.id,
         outgoingTransactionId: outgoing.id,
-        receivedAmount: incoming.amount,
-        forwardedAmount: outgoing.amount,
-        ratio: Number(ratio.toFixed(3)),
+        receivedAmountMinor: receivedMinor,
+        forwardedAmountMinor: forwardedMinor,
+        receivedAmount: fromMinorUnits(receivedMinor),
+        forwardedAmount: fromMinorUnits(forwardedMinor),
+        ratio: ratioOf(forwardedMinor, receivedMinor),
         delayMinutes: Number(toMinutes(delayMs).toFixed(3))
       });
       break;

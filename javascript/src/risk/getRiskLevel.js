@@ -1,11 +1,21 @@
+export const RISK_THRESHOLDS = {
+  CRITICAL: 80,
+  HIGH: 60,
+  MEDIUM: 30
+};
+
 export function getRiskLevel(score) {
-  if (score >= 80) {
+  if (typeof score !== "number" || !Number.isFinite(score)) {
+    throw new TypeError(`score must be a finite number, received: ${String(score)}`);
+  }
+
+  if (score >= RISK_THRESHOLDS.CRITICAL) {
     return "CRITICAL";
   }
-  if (score >= 60) {
+  if (score >= RISK_THRESHOLDS.HIGH) {
     return "HIGH";
   }
-  if (score >= 30) {
+  if (score >= RISK_THRESHOLDS.MEDIUM) {
     return "MEDIUM";
   }
   return "LOW";

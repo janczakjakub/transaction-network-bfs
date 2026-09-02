@@ -1,9 +1,6 @@
 import { bfs } from "../algorithms/bfs.js";
 import { generateTransactionNetwork } from "../generators/generateTransactionNetwork.js";
-
-function randomInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+import { randomInt, resolveRandom } from "../utils/random.js";
 
 function average(values) {
   if (values.length === 0) {
@@ -19,15 +16,21 @@ export function benchmarkBfs(options = {}) {
   const transactionCount = Number(options.transactions ?? 10_000);
   const maxDepth = Number(options.maxDepth ?? 3);
   const sampleSize = Number(options.sampleSize ?? 20);
+  const random = resolveRandom(options);
 
-  const { graph } = generateTransactionNetwork({
-    accounts: accountCount,
-    transactions: transactionCount
-  });
+  // Graf można podać z zewnątrz, żeby jedna wygenerowana sieć obsłużyła wiele głębokości.
+  const graph =
+    options.graph ??
+    generateTransactionNetwork({
+      accounts: accountCount,
+      transactions: transactionCount,
+      random,
+      startTimestamp: options.startTimestamp
+    }).graph;
   const accounts = graph.getAccounts();
 
   const runs = Array.from({ length: sampleSize }, () => {
-    const source = accounts[randomInt(0, accounts.length - 1)];
+    const source = accounts[randomInt(random, 0, accounts.length - 1)];
     const result = bfs(graph, source, { maxDepth });
     return {
       visitedAccounts: result.visitedAccounts,

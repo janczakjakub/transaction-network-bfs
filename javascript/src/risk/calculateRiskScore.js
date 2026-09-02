@@ -23,6 +23,10 @@ function scoreClosestFlaggedDistance(distance, reasons) {
 }
 
 export function calculateRiskScore(analysis, options = {}) {
+  if (!analysis || typeof analysis !== "object") {
+    throw new TypeError("analysis must be an object produced by analyzeAccount().");
+  }
+
   const suspiciousNearbyCap = options.suspiciousNearbyCap ?? 20;
   const suspiciousNearbyMultiplier = options.suspiciousNearbyMultiplier ?? 5;
   const rapidForwardingCap = options.rapidForwardingCap ?? 20;
@@ -72,10 +76,14 @@ export function calculateRiskScore(analysis, options = {}) {
   }
 
   const normalizedScore = Math.min(Math.max(Math.round(score), 0), 100);
+  const level = getRiskLevel(normalizedScore);
 
   return {
+    accountId: analysis.accountId ?? null,
     score: normalizedScore,
-    level: getRiskLevel(normalizedScore),
+    level,
+    riskScore: normalizedScore,
+    riskLevel: level,
     reasons
   };
 }

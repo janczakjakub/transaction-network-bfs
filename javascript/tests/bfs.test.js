@@ -84,3 +84,24 @@ test("findClosestFlaggedAccount finds nearest flagged account", () => {
   assert.equal(result.distance, 2);
   assert.deepEqual(result.path, ["ACC-A", "ACC-D", "ACC-E"]);
 });
+
+test("findConnection honours maxDepth passed through the public API", () => {
+  const graph = buildGraph();
+
+  const shallow = findConnection(graph, "ACC-A", "ACC-E", { maxDepth: 1 });
+  assert.equal(shallow.connected, false);
+  assert.equal(shallow.hops, null);
+
+  const deep = findConnection(graph, "ACC-A", "ACC-E", { maxDepth: 2 });
+  assert.equal(deep.connected, true);
+  assert.equal(deep.hops, 2);
+});
+
+test("findConnection reports a direct neighbour at one hop", () => {
+  const graph = buildGraph();
+  const result = findConnection(graph, "ACC-A", "ACC-B", { maxDepth: 1 });
+
+  assert.equal(result.connected, true);
+  assert.equal(result.hops, 1);
+  assert.deepEqual(result.path, ["ACC-A", "ACC-B"]);
+});

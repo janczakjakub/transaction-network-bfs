@@ -1,14 +1,8 @@
 import { bfs } from "./bfs.js";
+import { pickBfsStats } from "./bfsStats.js";
+import { assertAccountId, assertGraph } from "../validation/assertions.js";
 
-function pickBfsStats(result) {
-  return {
-    visitedAccounts: result.visitedAccounts,
-    transactionsChecked: result.transactionsChecked,
-    maxQueueSize: result.maxQueueSize,
-    maxDepthReached: result.maxDepthReached,
-    executionTimeMs: result.executionTimeMs
-  };
-}
+export const DEFAULT_CONNECTION_MAX_DEPTH = 6;
 
 export function findConnection(
   graph,
@@ -16,15 +10,21 @@ export function findConnection(
   targetAccount,
   options = {}
 ) {
+  assertGraph(graph);
+  assertAccountId(sourceAccount, "sourceAccount");
+  assertAccountId(targetAccount, "targetAccount");
+
+  const maxDepth = options.maxDepth ?? DEFAULT_CONNECTION_MAX_DEPTH;
   const result = bfs(graph, sourceAccount, {
     targetAccount,
-    maxDepth: options.maxDepth
+    maxDepth
   });
 
   return {
     connected: result.found,
     hops: result.pathLength,
     path: result.path,
+    maxDepth,
     bfs: pickBfsStats(result)
   };
 }

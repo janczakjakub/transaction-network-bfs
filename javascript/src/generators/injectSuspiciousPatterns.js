@@ -1,10 +1,10 @@
-function randomInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+import { fromMinorUnits, toMinorUnits } from "../money/money.js";
+import { formatTransactionId } from "../utils/ids.js";
+import { randomInt, resolveRandom } from "../utils/random.js";
+import { assertCount, assertTimestamp } from "../validation/assertions.js";
+import { MAX_SUSPICIOUS_PATTERNS } from "./limits.js";
 
-function formatTransactionId(index) {
-  return `TX-${String(index).padStart(6, "0")}`;
-}
+const FAN_PATTERN_SIZE = 26;
 
 function cloneAccount(account) {
   return {
@@ -13,24 +13,33 @@ function cloneAccount(account) {
   };
 }
 
-function pickDistinctAccounts(accounts, size) {
+function pickDistinctAccounts(accounts, size, random) {
   if (accounts.length < size) {
     return [];
   }
 
   const picked = new Set();
-  while (picked.size < size) {
-    picked.add(accounts[randomInt(0, accounts.length - 1)].id);
+  const maxAttempts = size * 10 + accounts.length;
+
+  for (let attempt = 0; attempt < maxAttempts && picked.size < size; attempt += 1) {
+    picked.add(accounts[randomInt(random, 0, accounts.length - 1)].id);
   }
+
+  // Deterministyczne domknięcie, gdy losowanie nie zebrało wymaganej liczby kont.
+  for (let index = 0; index < accounts.length && picked.size < size; index += 1) {
+    picked.add(accounts[index].id);
+  }
+
   return [...picked];
 }
 
-function pushTransaction(transactions, nextIdRef, from, to, amount, timestamp) {
+function pushTransaction(transactions, nextIdRef, from, to, amountMinor, timestamp) {
   const transaction = {
     id: formatTransactionId(nextIdRef.value),
     from,
     to,
-    amount,
+    amountMinor,
+    amount: fromMinorUnits(amountMinor),
     timestamp
   };
   nextIdRef.value += 1;
@@ -38,22 +47,28 @@ function pushTransaction(transactions, nextIdRef, from, to, amount, timestamp) {
   return transaction;
 }
 
-function injectRapidTransfers(accounts, transactions, metadata, count, nextIdRef, startTimestamp) {
+function injectRapidTransfers(context, count) {
+  const { accounts, transactions, metadata, nextIdRef, random, startTimestamp } = context;
+
   for (let index = 0; index < count; index += 1) {
-    const selected = pickDistinctAccounts(accounts, 3);
+    const selected = pickDistinctAccounts(accounts, 3, random);
     if (selected.length < 3) {
       break;
     }
 
     const [source, relay, destination] = selected;
     const timestamp = startTimestamp + index * 60_000;
-    const amount = randomInt(2_000, 20_000);
+    const amountMinor = randomInt(
+      random,
+      toMinorUnits(2_000),
+      toMinorUnits(20_000)
+    );
     const incoming = pushTransaction(
       transactions,
       nextIdRef,
       source,
       relay,
-      amount,
+      amountMinor,
       timestamp
     );
     const outgoing = pushTransaction(
@@ -61,8 +76,8 @@ function injectRapidTransfers(accounts, transactions, metadata, count, nextIdRef
       nextIdRef,
       relay,
       destination,
-      Math.round(amount * 0.95),
-      timestamp + randomInt(60_000, 9 * 60_000)
+      Math.round(amountMinor * 0.95),
+      timestamp + randomInt(random, 60_000, 9 * 60_000)
     );
 
     metadata.rapidTransfers.push({
@@ -75,10 +90,12 @@ function injectRapidTransfers(accounts, transactions, metadata, count, nextIdRef
   }
 }
 
-function injectFanOut(accounts, transactions, metadata, count, nextIdRef, startTimestamp) {
+function injectFanOut(context, count) {
+  const { accounts, transactions, metadata, nextIdRef, random, startTimestamp } = context;
+
   for (let index = 0; index < count; index += 1) {
-    const selected = pickDistinctAccounts(accounts, 26);
-    if (selected.length < 26) {
+    const selected = pickDistinctAccounts(accounts, FAN_PATTERN_SIZE, random);
+    if (selected.length < FAN_PATTERN_SIZE) {
       break;
     }
 
@@ -90,8 +107,8 @@ function injectFanOut(accounts, transactions, metadata, count, nextIdRef, startT
         nextIdRef,
         source,
         targetId,
-        randomInt(100, 2_000),
-        timestamp + randomInt(0, 30_000)
+        randomInt(random, toMinorUnits(100), toMinorUnits(2_000)),
+        timestamp + randomInt(random, 0, 30_000)
       ).id
     );
 
@@ -103,10 +120,12 @@ function injectFanOut(accounts, transactions, metadata, count, nextIdRef, startT
   }
 }
 
-function injectFanIn(accounts, transactions, metadata, count, nextIdRef, startTimestamp) {
+function injectFanIn(context, count) {
+  const { accounts, transactions, metadata, nextIdRef, random, startTimestamp } = context;
+
   for (let index = 0; index < count; index += 1) {
-    const selected = pickDistinctAccounts(accounts, 26);
-    if (selected.length < 26) {
+    const selected = pickDistinctAccounts(accounts, FAN_PATTERN_SIZE, random);
+    if (selected.length < FAN_PATTERN_SIZE) {
       break;
     }
 
@@ -118,8 +137,8 @@ function injectFanIn(accounts, transactions, metadata, count, nextIdRef, startTi
         nextIdRef,
         sourceId,
         target,
-        randomInt(100, 2_000),
-        timestamp + randomInt(0, 30_000)
+        randomInt(random, toMinorUnits(100), toMinorUnits(2_000)),
+        timestamp + randomInt(random, 0, 30_000)
       ).id
     );
 
@@ -131,11 +150,12 @@ function injectFanIn(accounts, transactions, metadata, count, nextIdRef, startTi
   }
 }
 
-function injectFlaggedConnections(accounts, transactions, metadata, count, nextIdRef, startTimestamp) {
+function injectFlaggedConnections(context, count) {
+  const { accounts, transactions, metadata, nextIdRef, random, startTimestamp } = context;
   const accountById = new Map(accounts.map((account) => [account.id, account]));
 
   for (let index = 0; index < count; index += 1) {
-    const selected = pickDistinctAccounts(accounts, 3);
+    const selected = pickDistinctAccounts(accounts, 3, random);
     if (selected.length < 3) {
       break;
     }
@@ -149,7 +169,7 @@ function injectFlaggedConnections(accounts, transactions, metadata, count, nextI
       nextIdRef,
       source,
       intermediary,
-      randomInt(500, 5_000),
+      randomInt(random, toMinorUnits(500), toMinorUnits(5_000)),
       timestamp
     );
     const second = pushTransaction(
@@ -157,8 +177,8 @@ function injectFlaggedConnections(accounts, transactions, metadata, count, nextI
       nextIdRef,
       intermediary,
       flaggedAccountId,
-      randomInt(500, 5_000),
-      timestamp + randomInt(60_000, 5 * 60_000)
+      randomInt(random, toMinorUnits(500), toMinorUnits(5_000)),
+      timestamp + randomInt(random, 60_000, 5 * 60_000)
     );
 
     metadata.flaggedConnections.push({
@@ -170,10 +190,18 @@ function injectFlaggedConnections(accounts, transactions, metadata, count, nextI
   }
 }
 
+function resolvePatternCount(value, fieldName) {
+  return assertCount(value ?? 0, {
+    fieldName,
+    max: MAX_SUSPICIOUS_PATTERNS
+  });
+}
+
 export function injectSuspiciousPatterns(
   inputAccounts = [],
   inputTransactions = [],
-  suspiciousPatterns = {}
+  suspiciousPatterns = {},
+  options = {}
 ) {
   const accounts = inputAccounts.map(cloneAccount);
   const transactions = [...inputTransactions];
@@ -185,46 +213,39 @@ export function injectSuspiciousPatterns(
   };
 
   const patterns = {
-    rapidTransfers: Number(suspiciousPatterns.rapidTransfers ?? 0),
-    fanOut: Number(suspiciousPatterns.fanOut ?? 0),
-    fanIn: Number(suspiciousPatterns.fanIn ?? 0),
-    flaggedConnections: Number(suspiciousPatterns.flaggedConnections ?? 0)
+    rapidTransfers: resolvePatternCount(
+      suspiciousPatterns.rapidTransfers,
+      "suspiciousPatterns.rapidTransfers"
+    ),
+    fanOut: resolvePatternCount(suspiciousPatterns.fanOut, "suspiciousPatterns.fanOut"),
+    fanIn: resolvePatternCount(suspiciousPatterns.fanIn, "suspiciousPatterns.fanIn"),
+    flaggedConnections: resolvePatternCount(
+      suspiciousPatterns.flaggedConnections,
+      "suspiciousPatterns.flaggedConnections"
+    )
   };
 
-  const nextIdRef = { value: transactions.length + 1 };
-  const startTimestamp = Date.now();
-
-  injectRapidTransfers(
-    accounts,
-    transactions,
-    metadata,
-    Math.max(0, patterns.rapidTransfers),
-    nextIdRef,
-    startTimestamp
+  const random = resolveRandom(options);
+  const startTimestamp = assertTimestamp(
+    options.startTimestamp ?? Date.now(),
+    "startTimestamp"
   );
+  const nextIdRef = { value: transactions.length + 1 };
+
+  const baseContext = { accounts, transactions, metadata, nextIdRef, random };
+
+  injectRapidTransfers({ ...baseContext, startTimestamp }, patterns.rapidTransfers);
   injectFanOut(
-    accounts,
-    transactions,
-    metadata,
-    Math.max(0, patterns.fanOut),
-    nextIdRef,
-    startTimestamp + 10_000_000
+    { ...baseContext, startTimestamp: startTimestamp + 10_000_000 },
+    patterns.fanOut
   );
   injectFanIn(
-    accounts,
-    transactions,
-    metadata,
-    Math.max(0, patterns.fanIn),
-    nextIdRef,
-    startTimestamp + 20_000_000
+    { ...baseContext, startTimestamp: startTimestamp + 20_000_000 },
+    patterns.fanIn
   );
   injectFlaggedConnections(
-    accounts,
-    transactions,
-    metadata,
-    Math.max(0, patterns.flaggedConnections),
-    nextIdRef,
-    startTimestamp + 30_000_000
+    { ...baseContext, startTimestamp: startTimestamp + 30_000_000 },
+    patterns.flaggedConnections
   );
 
   return {

@@ -1,18 +1,18 @@
-function formatAccountId(index) {
-  return `ACC-${String(index).padStart(6, "0")}`;
-}
+import { formatAccountId } from "../utils/ids.js";
+import { resolveRandom } from "../utils/random.js";
+import { assertCount } from "../validation/assertions.js";
+import { MAX_ACCOUNTS } from "./limits.js";
 
 export function generateAccounts(count, options = {}) {
-  const total = Math.max(0, Number(count) || 0);
-  const flaggedRatio = options.flaggedRatio ?? 0;
-
-  return Array.from({ length: total }, (_, index) => {
-    const id = formatAccountId(index + 1);
-    const flagged = Math.random() < flaggedRatio;
-
-    return {
-      id,
-      flagged
-    };
+  const total = assertCount(count ?? 0, {
+    fieldName: "accounts",
+    max: MAX_ACCOUNTS
   });
+  const flaggedRatio = options.flaggedRatio ?? 0;
+  const random = resolveRandom(options);
+
+  return Array.from({ length: total }, (_, index) => ({
+    id: formatAccountId(index + 1),
+    flagged: random() < flaggedRatio
+  }));
 }

@@ -1,3 +1,6 @@
+import { assertMinorUnits, fromMinorUnits, toMinorUnits } from "../money/money.js";
+import { assertAccountId, assertTimestamp } from "../validation/assertions.js";
+
 export class TransactionGraph {
   constructor(accounts = []) {
     this.outgoing = new Map();
@@ -34,17 +37,33 @@ export class TransactionGraph {
     this.accountMeta.set(accountId, { ...previous, ...metadata });
   }
 
+  hasAccount(accountId) {
+    return this.outgoing.has(accountId);
+  }
+
   addTransaction(transaction) {
-    if (!transaction || !transaction.from || !transaction.to) {
-      throw new Error("Transaction must include from and to account IDs.");
+    if (!transaction || typeof transaction !== "object") {
+      throw new TypeError("Transaction must be an object.");
     }
+
+    assertAccountId(transaction.from, "transaction.from");
+    assertAccountId(transaction.to, "transaction.to");
+
+    const amountMinor =
+      transaction.amountMinor === undefined
+        ? toMinorUnits(transaction.amount ?? 0, "transaction.amount")
+        : assertMinorUnits(transaction.amountMinor, "transaction.amountMinor");
 
     const normalizedTransaction = {
       id: transaction.id ?? "",
       from: transaction.from,
       to: transaction.to,
-      amount: Number(transaction.amount ?? 0),
-      timestamp: Number(transaction.timestamp ?? Date.now())
+      amountMinor,
+      amount: fromMinorUnits(amountMinor),
+      timestamp: assertTimestamp(
+        transaction.timestamp ?? Date.now(),
+        "transaction.timestamp"
+      )
     };
 
     this.addAccount(normalizedTransaction.from);
