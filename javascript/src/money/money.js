@@ -62,7 +62,7 @@ export function getAmountMinor(transaction) {
   }
 
   if (Number.isSafeInteger(transaction.amountMinor)) {
-    return transaction.amountMinor;
+    return assertMinorUnits(transaction.amountMinor, "amountMinor");
   }
 
   return toMinorUnits(transaction.amount ?? 0);

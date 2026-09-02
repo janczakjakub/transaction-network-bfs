@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { generateAccounts } from "../src/generators/generateAccounts.js";
 import { generateTransactions } from "../src/generators/generateTransactions.js";
 import { generateTransactionNetwork } from "../src/generators/generateTransactionNetwork.js";
+import { injectSuspiciousPatterns } from "../src/generators/injectSuspiciousPatterns.js";
 import { MAX_ACCOUNTS, MAX_TRANSACTIONS } from "../src/generators/limits.js";
 
 const NETWORK_OPTIONS = {
@@ -70,6 +71,24 @@ test("generators reject sizes above the hard limits", () => {
 test("generators reject non-numeric sizes", () => {
   assert.throws(() => generateAccounts("many"), TypeError);
   assert.throws(() => generateAccounts(Number.NaN), TypeError);
+});
+
+test("injectSuspiciousPatterns rejects combinations exceeding MAX_TRANSACTIONS", () => {
+  const accounts = generateAccounts(30, { seed: 1 });
+  const transactions = generateTransactions({
+    accounts,
+    transactions: MAX_TRANSACTIONS,
+    seed: 1,
+    startTimestamp: 0
+  });
+
+  assert.throws(
+    () =>
+      injectSuspiciousPatterns(accounts, transactions, {
+        rapidTransfers: 1
+      }),
+    RangeError
+  );
 });
 
 test("generateTransactions returns nothing when there is no pair to connect", () => {

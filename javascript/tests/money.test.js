@@ -42,6 +42,10 @@ test("getAmountMinor prefers amountMinor and falls back to amount", () => {
   assert.equal(getAmountMinor(null), 0);
 });
 
+test("getAmountMinor rejects negative amountMinor", () => {
+  assert.throws(() => getAmountMinor({ amountMinor: -100 }), RangeError);
+});
+
 test("isRatioWithin compares ratios without float division", () => {
   assert.equal(isRatioWithin(960_000, 1_000_000, 0.9, 1.1), true);
   assert.equal(isRatioWithin(800_000, 1_000_000, 0.9, 1.1), false);

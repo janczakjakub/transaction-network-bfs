@@ -2,9 +2,36 @@ import { fromMinorUnits, toMinorUnits } from "../money/money.js";
 import { formatTransactionId } from "../utils/ids.js";
 import { randomInt, resolveRandom } from "../utils/random.js";
 import { assertCount, assertTimestamp } from "../validation/assertions.js";
-import { MAX_SUSPICIOUS_PATTERNS } from "./limits.js";
+import { MAX_SUSPICIOUS_PATTERNS, MAX_TRANSACTIONS } from "./limits.js";
 
 const FAN_PATTERN_SIZE = 26;
+
+/** Stały koszt transakcji na wzorzec — używany do wstępnej walidacji budżetu przed alokacją. */
+export const TRANSACTIONS_PER_RAPID_TRANSFER = 2;
+export const TRANSACTIONS_PER_FAN_OUT = FAN_PATTERN_SIZE - 1;
+export const TRANSACTIONS_PER_FAN_IN = FAN_PATTERN_SIZE - 1;
+export const TRANSACTIONS_PER_FLAGGED_CONNECTION = 2;
+
+export function countSuspiciousPatternTransactions(patterns) {
+  return (
+    patterns.rapidTransfers * TRANSACTIONS_PER_RAPID_TRANSFER +
+    patterns.fanOut * TRANSACTIONS_PER_FAN_OUT +
+    patterns.fanIn * TRANSACTIONS_PER_FAN_IN +
+    patterns.flaggedConnections * TRANSACTIONS_PER_FLAGGED_CONNECTION
+  );
+}
+
+function assertTransactionBudget(baseCount, patterns, maxTransactions = MAX_TRANSACTIONS) {
+  const injectedCount = countSuspiciousPatternTransactions(patterns);
+  const total = baseCount + injectedCount;
+
+  if (total > maxTransactions) {
+    throw new RangeError(
+      `Total transactions (base ${baseCount} + injected ${injectedCount} = ${total}) ` +
+        `must not exceed ${maxTransactions}. Reduce transactions or suspiciousPatterns counts.`
+    );
+  }
+}
 
 function cloneAccount(account) {
   return {
@@ -224,6 +251,12 @@ export function injectSuspiciousPatterns(
       "suspiciousPatterns.flaggedConnections"
     )
   };
+
+  assertTransactionBudget(
+    transactions.length,
+    patterns,
+    options.maxTransactions ?? MAX_TRANSACTIONS
+  );
 
   const random = resolveRandom(options);
   const startTimestamp = assertTimestamp(
