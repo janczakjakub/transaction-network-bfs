@@ -1,20 +1,12 @@
 import { performance } from "node:perf_hooks";
 
+import { DEFAULT_MAX_DEPTH, DEFAULT_MAX_VISITED } from "./bfs.js";
 import {
   assertAccountId,
   assertCount,
   assertGraph,
   resolveMaxDepth
 } from "../validation/assertions.js";
-
-/**
- * Domyślny limit głębokości. Brak jawnego `maxDepth` nie oznacza nieskończoności -
- * inaczej pojedyncze wywołanie na dużym grafie przeszukiwałoby całą sieć.
- */
-export const DEFAULT_MAX_DEPTH = 10;
-
-/** Bezpiecznik na wyczerpanie pamięci przy grafach o nieoczekiwanej wielkości. */
-export const DEFAULT_MAX_VISITED = 1_000_000;
 
 const ALLOWED_DIRECTIONS = new Set(["outgoing", "incoming"]);
 
@@ -40,7 +32,6 @@ function toRoundedMs(startMs) {
   return Number((performance.now() - startMs).toFixed(3));
 }
 
-/** Mapa bez prototypu - klucze pochodzą z danych wejściowych (np. `__proto__`). */
 function mapToNullProtoObject(map) {
   const obj = Object.create(null);
   for (const [key, value] of map.entries()) {
@@ -70,18 +61,6 @@ function buildPath(parentByAccount, sourceAccount, targetAccount) {
   return path;
 }
 
-/**
- * Odtwarza najkrótszą ścieżkę do dowolnego konta odwiedzonego w danym przebiegu BFS.
- * Pozwala jednemu przejściu obsłużyć wiele zapytań o ścieżkę - `O(długość ścieżki)`.
- */
-export function buildPathTo(result, targetAccount) {
-  if (!result || !result.parentByAccount || !result.parentByAccount.has(targetAccount)) {
-    return [];
-  }
-
-  return buildPath(result.parentByAccount, result.sourceAccount, targetAccount);
-}
-
 function emptyResult(sourceAccount, startedAt) {
   return {
     found: false,
@@ -103,23 +82,10 @@ function emptyResult(sourceAccount, startedAt) {
 }
 
 /**
- * Przeszukiwanie wszerz po grafie transakcji.
- *
- * Złożoność czasowa: `O(V + E)` - każde konto trafia do kolejki najwyżej raz
- * (oznaczanie `visited` przy dodaniu do kolejki), a każda transakcja jest sprawdzana
- * najwyżej raz w danym kierunku. Dequeue jest amortyzowanym `O(1)` dzięki indeksowi
- * `head` zamiast `Array.prototype.shift()`.
- *
- * Złożoność pamięciowa: `O(V)` - zbiór `visited`, mapy `parent`/`depth` oraz kolejka
- * rosną liniowo z liczbą osiągniętych kont.
- *
- * Wpływ `maxDepth`: ogranicza przeszukiwanie do kuli o promieniu `maxDepth`. Praktyczny
- * koszt to `O(V_d + E_d)`, gdzie `V_d`/`E_d` to konta i transakcje w zasięgu `maxDepth`.
- * W rzadkim grafie o średnim stopniu `b` daje to w przybliżeniu `O(b^maxDepth)`.
- *
- * Funkcja nie modyfikuje przekazanego grafu.
+ * Benchmark-only BFS variant that keeps traversal semantics identical to `bfs()`
+ * but uses `Array.prototype.shift()` for dequeue operations.
  */
-export function bfs(graph, sourceAccount, options = {}) {
+export function bfsWithShift(graph, sourceAccount, options = {}) {
   const startedAt = performance.now();
 
   assertGraph(graph);
@@ -145,7 +111,6 @@ export function bfs(graph, sourceAccount, options = {}) {
   const visitOrder = [sourceAccount];
   const queue = [{ accountId: sourceAccount, depth: 0 }];
 
-  let head = 0;
   let found = false;
   let foundAccount = null;
   let transactionsChecked = 0;
@@ -153,9 +118,8 @@ export function bfs(graph, sourceAccount, options = {}) {
   let maxDepthReached = 0;
   let truncated = false;
 
-  while (head < queue.length) {
-    const current = queue[head];
-    head += 1;
+  while (queue.length > 0) {
+    const current = queue.shift();
 
     if (current.depth > maxDepthReached) {
       maxDepthReached = current.depth;
@@ -201,8 +165,8 @@ export function bfs(graph, sourceAccount, options = {}) {
       visitOrder.push(neighborAccountId);
       queue.push({ accountId: neighborAccountId, depth: current.depth + 1 });
 
-      if (queue.length - head > maxQueueSize) {
-        maxQueueSize = queue.length - head;
+      if (queue.length > maxQueueSize) {
+        maxQueueSize = queue.length;
       }
     }
 

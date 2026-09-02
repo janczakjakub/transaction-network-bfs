@@ -6,13 +6,16 @@ import { TransactionGraph } from "../src/graph/TransactionGraph.js";
 test("addTransaction rejects missing or empty account IDs", () => {
   const graph = new TransactionGraph();
 
-  assert.throws(() => graph.addTransaction({ to: "ACC-B", amount: 1 }), TypeError);
   assert.throws(
-    () => graph.addTransaction({ from: "", to: "ACC-B", amount: 1 }),
+    () => graph.addTransaction({ id: "TX-1", to: "ACC-B", amount: 1 }),
     TypeError
   );
   assert.throws(
-    () => graph.addTransaction({ from: "ACC-A", to: "", amount: 1 }),
+    () => graph.addTransaction({ id: "TX-2", from: "", to: "ACC-B", amount: 1 }),
+    TypeError
+  );
+  assert.throws(
+    () => graph.addTransaction({ id: "TX-3", from: "ACC-A", to: "", amount: 1 }),
     TypeError
   );
   assert.throws(() => graph.addTransaction(null), TypeError);
@@ -21,7 +24,7 @@ test("addTransaction rejects missing or empty account IDs", () => {
 
 test("addTransaction rejects invalid amounts and timestamps", () => {
   const graph = new TransactionGraph();
-  const base = { from: "ACC-A", to: "ACC-B" };
+  const base = { id: "TX-BASE", from: "ACC-A", to: "ACC-B" };
 
   assert.throws(() => graph.addTransaction({ ...base, amount: Number.NaN }), TypeError);
   assert.throws(
@@ -32,6 +35,91 @@ test("addTransaction rejects invalid amounts and timestamps", () => {
   assert.throws(
     () => graph.addTransaction({ ...base, amount: 1, timestamp: Number.NaN }),
     TypeError
+  );
+});
+
+test("addTransaction accepts a valid transaction.id", () => {
+  const graph = new TransactionGraph();
+
+  graph.addTransaction({
+    id: "TX-VALID",
+    from: "ACC-A",
+    to: "ACC-B",
+    amount: 100,
+    timestamp: 1
+  });
+
+  const [stored] = graph.getOutgoing("ACC-A");
+  assert.equal(stored.id, "TX-VALID");
+});
+
+test("addTransaction rejects a missing transaction.id", () => {
+  const graph = new TransactionGraph();
+
+  assert.throws(
+    () =>
+      graph.addTransaction({
+        from: "ACC-A",
+        to: "ACC-B",
+        amount: 100,
+        timestamp: 1
+      }),
+    TypeError
+  );
+});
+
+test("addTransaction rejects an empty transaction.id", () => {
+  const graph = new TransactionGraph();
+
+  assert.throws(
+    () =>
+      graph.addTransaction({
+        id: "",
+        from: "ACC-A",
+        to: "ACC-B",
+        amount: 100,
+        timestamp: 1
+      }),
+    TypeError
+  );
+});
+
+test("addTransaction rejects transaction.id containing only whitespace", () => {
+  const graph = new TransactionGraph();
+
+  assert.throws(
+    () =>
+      graph.addTransaction({
+        id: "   ",
+        from: "ACC-A",
+        to: "ACC-B",
+        amount: 100,
+        timestamp: 1
+      }),
+    TypeError
+  );
+});
+
+test("addTransaction rejects duplicate transaction.id values", () => {
+  const graph = new TransactionGraph();
+  const transaction = {
+    id: "TX-1",
+    from: "ACC-A",
+    to: "ACC-B",
+    amount: 100,
+    timestamp: 1
+  };
+
+  graph.addTransaction(transaction);
+
+  assert.throws(
+    () =>
+      graph.addTransaction({
+        ...transaction,
+        from: "ACC-B",
+        to: "ACC-C"
+      }),
+    /Transaction with id "TX-1" already exists/
   );
 });
 

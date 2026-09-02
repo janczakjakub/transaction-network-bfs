@@ -22,6 +22,15 @@ function buildChain(length) {
   return graph;
 }
 
+function buildDirectionGraph() {
+  const graph = new TransactionGraph();
+  graph.addTransactions([
+    { id: "TX-A-B", from: "ACC-A", to: "ACC-B", amount: 100, timestamp: 1 },
+    { id: "TX-B-C", from: "ACC-B", to: "ACC-C", amount: 100, timestamp: 2 }
+  ]);
+  return graph;
+}
+
 test("bfs returns a zero-length path when source equals target", () => {
   const graph = buildChain(3);
   const result = bfs(graph, "ACC-0", { targetAccount: "ACC-0" });
@@ -59,6 +68,59 @@ test("bfs with maxDepth 0 visits only the source account", () => {
   assert.equal(result.visitedAccounts, 1);
   assert.equal(result.transactionsChecked, 0);
   assert.deepEqual(result.reachedAccounts, []);
+});
+
+test('bfs supports direction: "outgoing"', () => {
+  const graph = buildDirectionGraph();
+  const result = bfs(graph, "ACC-A", {
+    direction: "outgoing",
+    targetAccount: "ACC-C",
+    maxDepth: 2
+  });
+
+  assert.equal(result.found, true);
+  assert.deepEqual(result.path, ["ACC-A", "ACC-B", "ACC-C"]);
+});
+
+test('bfs supports direction: "incoming"', () => {
+  const graph = buildDirectionGraph();
+  const result = bfs(graph, "ACC-C", {
+    direction: "incoming",
+    targetAccount: "ACC-A",
+    maxDepth: 2
+  });
+
+  assert.equal(result.found, true);
+  assert.deepEqual(result.path, ["ACC-C", "ACC-B", "ACC-A"]);
+});
+
+test("bfs uses outgoing direction when direction is not provided", () => {
+  const graph = buildDirectionGraph();
+  const result = bfs(graph, "ACC-A", {
+    targetAccount: "ACC-C",
+    maxDepth: 2
+  });
+
+  assert.equal(result.found, true);
+  assert.deepEqual(result.path, ["ACC-A", "ACC-B", "ACC-C"]);
+});
+
+test("bfs rejects an invalid direction value", () => {
+  const graph = buildDirectionGraph();
+
+  assert.throws(
+    () => bfs(graph, "ACC-A", { direction: "sideways" }),
+    /Invalid BFS direction "sideways"\. Expected "outgoing" or "incoming"\./
+  );
+});
+
+test("bfs rejects direction typos", () => {
+  const graph = buildDirectionGraph();
+
+  assert.throws(
+    () => bfs(graph, "ACC-A", { direction: "incomming" }),
+    /Invalid BFS direction "incomming"\. Expected "outgoing" or "incoming"\./
+  );
 });
 
 test("bfs counts parallel edges once per transaction but visits the account once", () => {

@@ -79,6 +79,36 @@ test("analyzeAccount aggregates bfs and detector outputs", () => {
   assert.ok(result.accountsReached >= 1);
 });
 
+test("analyzeAccount reports isFlagged=true when the analyzed account is flagged", () => {
+  const graph = new TransactionGraph([{ id: "ACC-FLAGGED", flagged: true }]);
+  graph.addTransaction({
+    id: "TX-1",
+    from: "ACC-FLAGGED",
+    to: "ACC-OTHER",
+    amount: 100,
+    timestamp: 1
+  });
+
+  const result = analyzeAccount(graph, "ACC-FLAGGED", { maxDepth: 2 });
+
+  assert.equal(result.isFlagged, true);
+});
+
+test("analyzeAccount reports isFlagged=false when the analyzed account is not flagged", () => {
+  const graph = new TransactionGraph([{ id: "ACC-CLEAN" }, { id: "ACC-OTHER" }]);
+  graph.addTransaction({
+    id: "TX-1",
+    from: "ACC-CLEAN",
+    to: "ACC-OTHER",
+    amount: 100,
+    timestamp: 1
+  });
+
+  const result = analyzeAccount(graph, "ACC-CLEAN", { maxDepth: 2 });
+
+  assert.equal(result.isFlagged, false);
+});
+
 test("analyzeAccount reuses a single BFS traversal for every graph signal", () => {
   const graph = new TransactionGraph([{ id: "ACC-C", flagged: true }]);
   graph.addTransactions([

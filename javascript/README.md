@@ -48,6 +48,8 @@ npm start
 
 Skrypt uruchamia `node src/index.js` i generuje raport analizy przykładowego konta.
 
+The script runs `node src/index.js` and prints an analysis report for a sample account.
+
 ### 3) Uruchomienie testów / Run tests
 
 ```bash
@@ -55,6 +57,8 @@ npm test
 ```
 
 Testy wykorzystują wbudowany runner Node (`node --test`).
+
+Tests use the built-in Node test runner (`node --test`).
 
 ### 4) Uruchomienie benchmarku / Run benchmark
 
@@ -64,6 +68,26 @@ npm run benchmark
 
 Domyślnie mierzone są scenariusze 1k/10k i 10k/100k dla głębokości 1-5. Pełny zestaw (włącznie ze scenariuszem 100k kont / 1M transakcji) uruchamia `SCENARIOS=full npm run benchmark`.
 
+By default, scenarios 1k/10k and 10k/100k are measured for depths 1-5. The full suite (including 100k accounts / 1M transactions) runs with `SCENARIOS=full npm run benchmark`.
+
+### Queue benchmark: head index vs Array.shift()
+
+```bash
+npm run benchmark:queue
+```
+
+Benchmark porównuje dwie strategie kolejki dla BFS na tym samym wygenerowanym grafie i tych samych parametrach przebiegu:
+- `head` index (implementacja produkcyjna),
+- `Array.shift()` (wariant edukacyjny wyłącznie do porównań).
+
+The benchmark compares two queue strategies for BFS on the same generated graph and the same run parameters:
+- `head` index (production implementation),
+- `Array.shift()` (educational variant for comparison only).
+
+Wynik ma charakter edukacyjny i zależy od wersji Node.js, silnika V8, sprzętu oraz charakterystyki grafu. Opcjonalny scenariusz large uruchamia `SCENARIOS=full npm run benchmark:queue`.
+
+Results are educational and depend on the Node.js version, V8 engine, hardware, and graph characteristics. The optional large scenario runs with `SCENARIOS=full npm run benchmark:queue`.
+
 ## Złożoność BFS / BFS complexity
 
 ### Czas / Time: `O(V + E)`
@@ -71,11 +95,27 @@ Domyślnie mierzone są scenariusze 1k/10k i 10k/100k dla głębokości 1-5. Pe�
 Każde konto trafia do kolejki najwyżej raz, ponieważ `visited` jest oznaczany w momencie
 dodania do kolejki, a nie przy zdejmowaniu. Każda transakcja jest sprawdzana najwyżej raz
 w danym kierunku. Zdjęcie z kolejki jest amortyzowanym `O(1)` dzięki indeksowi `head`
-zamiast `Array.prototype.shift()`, które kopiuje całą tablicę i podniosłoby koszt do `O(V^2)`.
+zamiast `Array.prototype.shift()`, które usuwa pierwszy element tablicy i może wymagać
+dodatkowej pracy związanej z reorganizacją elementów.
+
+Each account enters the queue at most once, because `visited` is set when the account is
+enqueued, not when it is dequeued. Each transaction is checked at most once in a given
+direction. Dequeue is amortized `O(1)` thanks to the `head` index instead of
+`Array.prototype.shift()`, which removes the first array element and may require extra work
+to reorganize the remaining elements.
+
+W praktycznych implementacjach kolejki dla BFS dlatego często używa się rosnącego indeksu
+`head`. Różnicę dla tego projektu można sprawdzić benchmarkiem `npm run benchmark:queue`.
+
+In practical BFS queue implementations, a growing `head` index is therefore often preferred.
+You can measure the difference in this project with `npm run benchmark:queue`.
 
 ### Pamięć / Memory: `O(V)`
 
 Zbiór `visited`, mapy `parent` i `depth` oraz kolejka rosną liniowo z liczbą osiągniętych kont.
+
+The `visited` set, `parent` and `depth` maps, and the queue all grow linearly with the number
+of reached accounts.
 
 ### Wpływ `maxDepth` / Impact of `maxDepth`
 
@@ -85,7 +125,13 @@ W rzadkim grafie o średnim stopniu wychodzącym `b` liczba odwiedzonych kont ro
 w przybliżeniu jak `b^maxDepth`, aż do nasycenia rozmiarem całej sieci. Pomiar dla sieci
 10k kont / 100k transakcji (`npm run benchmark`):
 
-| maxDepth | odwiedzone konta | sprawdzone transakcje |
+`maxDepth` limits the search to a ball of radius `maxDepth` around the source account, so
+the practical cost is `O(V_d + E_d)`, where `V_d` and `E_d` are the accounts and transactions
+within reach. In a sparse graph with average out-degree `b`, the number of visited accounts
+grows roughly like `b^maxDepth` until the search saturates the whole network. Sample
+measurements for a 10k accounts / 100k transactions network (`npm run benchmark`):
+
+| maxDepth | odwiedzone konta / visited accounts | sprawdzone transakcje / transactions checked |
 | --- | --- | --- |
 | 1 | ~10 | ~9 |
 | 2 | ~118 | ~118 |
@@ -97,6 +143,10 @@ Brak jawnego `maxDepth` nie oznacza nieskończoności - domyślny limit to `DEFA
 Dodatkowym bezpiecznikiem jest `maxVisited` (domyślnie 1 000 000); po jego przekroczeniu wynik
 zawiera `truncated: true`.
 
+An explicit `maxDepth` is not unlimited - the default cap is `DEFAULT_MAX_DEPTH = 10`.
+An additional safeguard is `maxVisited` (default 1 000 000); when exceeded, the result
+includes `truncated: true`.
+
 ## Kwoty / Amounts
 
 Źródłem prawdy jest `amountMinor` - liczba całkowita w groszach, walidowana przez
@@ -104,10 +154,19 @@ zawiera `truncated: true`.
 do wyświetlania. Porównania proporcji w detektorach używają mnożenia krzyżowego na `BigInt`,
 dzięki czemu wynik nie zależy od błędów zaokrągleń IEEE-754.
 
+The source of truth is `amountMinor` - an integer in minor units, validated with
+`Number.isSafeInteger`. The `amount` field (in major currency units) is a derived value for
+display. Ratio comparisons in detectors use cross-multiplication on `BigInt`, so results do
+not depend on IEEE-754 rounding errors.
+
 ## Determinizm / Determinism
 
 Generatory i benchmark przyjmują `seed` (albo własną funkcję `random`). Ten sam seed razem
 z `startTimestamp` daje identyczną sieć, co czyni testy i pomiary powtarzalnymi:
+
+Generators and benchmarks accept a `seed` (or a custom `random` function). The same seed
+together with `startTimestamp` produces an identical network, which makes tests and
+measurements reproducible:
 
 ```js
 generateTransactionNetwork({ accounts: 200, transactions: 800, seed: "demo", startTimestamp: 0 });
@@ -115,11 +174,17 @@ generateTransactionNetwork({ accounts: 200, transactions: 800, seed: "demo", sta
 
 Bez podanego seeda generatory korzystają z `Math.random()`.
 
+Without a seed, generators fall back to `Math.random()`.
+
 ## Limity wejścia / Input limits
 
 Rozmiar generowanej sieci jest walidowany, żeby wartość z niezaufanego źródła nie doprowadziła
 do wyczerpania pamięci: `MAX_ACCOUNTS = 1 000 000`, `MAX_TRANSACTIONS = 5 000 000`.
 Przekroczenie limitu kończy się `RangeError`.
+
+Generated network size is validated so untrusted input cannot exhaust memory:
+`MAX_ACCOUNTS = 1 000 000`, `MAX_TRANSACTIONS = 5 000 000`. Exceeding a limit throws
+`RangeError`.
 
 ## Konfiguracja uruchomienia CLI / CLI runtime configuration
 
@@ -129,7 +194,13 @@ Możesz nadpisać domyślne parametry przez zmienne środowiskowe:
 - `MAX_DEPTH` (domyślnie `3`, maksymalnie `20`),
 - `SEED` (opcjonalny, dla powtarzalnego wyniku).
 
-Przykład:
+You can override default parameters with environment variables:
+- `ACCOUNTS` (default `10000`, maximum `1000000`),
+- `TRANSACTIONS` (default `100000`, maximum `5000000`),
+- `MAX_DEPTH` (default `3`, maximum `20`),
+- `SEED` (optional, for reproducible output).
+
+Przykład / Example:
 
 ```bash
 ACCOUNTS=5000 TRANSACTIONS=50000 MAX_DEPTH=4 SEED=demo npm start
@@ -137,16 +208,18 @@ ACCOUNTS=5000 TRANSACTIONS=50000 MAX_DEPTH=4 SEED=demo npm start
 
 Wartości spoza zakresu są odrzucane z czytelnym komunikatem zamiast prowadzić do awarii procesu.
 
+Out-of-range values are rejected with a clear message instead of crashing the process.
+
 ## Struktura (skrót) / Structure (short)
 
-- `src/graph` - model grafu (`TransactionGraph`) i obsługa oznaczeń kont
-- `src/algorithms` - BFS i funkcje oparte o BFS
-- `src/analysis` - agregacja analizy konta
-- `src/detection` - detektory sygnałów
-- `src/risk` - obliczanie risk score i poziomu ryzyka
-- `src/money` - arytmetyka kwot w jednostkach minor
-- `src/generators` - generator danych syntetycznych i limity wejścia
-- `src/benchmark` - moduły benchmarkowe (`npm run benchmark`)
-- `src/utils` - PRNG z seedem i formatowanie identyfikatorów
-- `src/validation` - wspólne asercje wejścia publicznego API
-- `tests` - testy deterministyczne
+- `src/graph` - model grafu (`TransactionGraph`) i obsługa oznaczeń kont / graph model (`TransactionGraph`) and account flag handling
+- `src/algorithms` - BFS i funkcje oparte o BFS / BFS and BFS-based helpers
+- `src/analysis` - agregacja analizy konta / account analysis aggregation
+- `src/detection` - detektory sygnałów / signal detectors
+- `src/risk` - obliczanie risk score i poziomu ryzyka / risk score and risk level calculation
+- `src/money` - arytmetyka kwot w jednostkach minor / amount arithmetic in minor units
+- `src/generators` - generator danych syntetycznych i limity wejścia / synthetic data generator and input limits
+- `src/benchmark` - moduły benchmarkowe (`npm run benchmark`, `npm run benchmark:queue`) / benchmark modules
+- `src/utils` - PRNG z seedem i formatowanie identyfikatorów / seeded PRNG and identifier formatting
+- `src/validation` - wspólne asercje wejścia publicznego API / shared public API input assertions
+- `tests` - testy deterministyczne / deterministic tests

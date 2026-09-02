@@ -76,6 +76,7 @@ export function analyzeAccount(graph, accountId, options = {}) {
 
   return {
     accountId,
+    isFlagged: isFlagged(accountId),
     maxDepth,
     closestFlaggedAccount:
       nearestFlagged.accountId === null

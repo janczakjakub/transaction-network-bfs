@@ -1,11 +1,24 @@
 import { assertMinorUnits, fromMinorUnits, toMinorUnits } from "../money/money.js";
 import { assertAccountId, assertTimestamp } from "../validation/assertions.js";
 
+function assertTransactionId(transactionId) {
+  if (transactionId === undefined || transactionId === null) {
+    throw new TypeError("transaction.id must be a non-empty string.");
+  }
+
+  if (typeof transactionId !== "string" || transactionId.trim().length === 0) {
+    throw new TypeError("transaction.id must be a non-empty string.");
+  }
+
+  return transactionId;
+}
+
 export class TransactionGraph {
   constructor(accounts = []) {
     this.outgoing = new Map();
     this.incoming = new Map();
     this.accountMeta = new Map();
+    this.transactionIds = new Set();
 
     for (const account of accounts) {
       if (typeof account === "string") {
@@ -46,6 +59,12 @@ export class TransactionGraph {
       throw new TypeError("Transaction must be an object.");
     }
 
+    const transactionId = assertTransactionId(transaction.id);
+
+    if (this.transactionIds.has(transactionId)) {
+      throw new Error(`Transaction with id "${transactionId}" already exists`);
+    }
+
     assertAccountId(transaction.from, "transaction.from");
     assertAccountId(transaction.to, "transaction.to");
 
@@ -55,7 +74,7 @@ export class TransactionGraph {
         : assertMinorUnits(transaction.amountMinor, "transaction.amountMinor");
 
     const normalizedTransaction = {
-      id: transaction.id ?? "",
+      id: transactionId,
       from: transaction.from,
       to: transaction.to,
       amountMinor,
@@ -71,6 +90,7 @@ export class TransactionGraph {
 
     this.outgoing.get(normalizedTransaction.from).push(normalizedTransaction);
     this.incoming.get(normalizedTransaction.to).push(normalizedTransaction);
+    this.transactionIds.add(transactionId);
   }
 
   addTransactions(transactions = []) {

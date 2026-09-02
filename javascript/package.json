@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "benchmark": "node src/benchmark/run.js",
+    "benchmark:queue": "node src/benchmark/runQueueStrategies.js",
     "test": "node --test"
   },
   "engines": {
